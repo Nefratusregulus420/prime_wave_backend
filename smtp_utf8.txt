@@ -1,0 +1,11 @@
+﻿--------------------------------------------------
+≡ƒÜÇ SMTP Diagnostic Tool
+--------------------------------------------------
+Testing SMTP connection for: primewavelifestyle@gmail.com
+1. Starting verification...
+Γ£à Success: SMTP server is reachable and credentials are valid!
+ΓÅ▒∩╕Å  Latency: 1.42 seconds
+2. Sending test email...
+Γ£à Success: Test email sent successfully!
+ΓÅ▒∩╕Å  Email Send Latency: 3.44 seconds
+--------------------------------------------------

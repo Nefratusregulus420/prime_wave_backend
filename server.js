@@ -93,14 +93,21 @@ app.post("/api/contact", async (req, res) => {
       });
     }
 
-    // Insert into PostgreSQL database
-    const insertQuery = `INSERT INTO contacts (name, email, message) VALUES ($1, $2, $3) RETURNING id`;
-    const dbResult = await pool.query(insertQuery, [name, email, message]);
-    console.log(`Successfully saved to database with ID: ${dbResult.rows[0].id}`);
+    // Insert into PostgreSQL database (wrapped in try/catch so it doesn't block SMTP if DB fails)
+    let dbId = null;
+    try {
+      const insertQuery = `INSERT INTO contacts (name, email, message) VALUES ($1, $2, $3) RETURNING id`;
+      const dbResult = await pool.query(insertQuery, [name, email, message]);
+      dbId = dbResult.rows[0].id;
+      console.log(`Successfully saved to database with ID: ${dbId}`);
+    } catch (err) {
+      console.error("⚠️ Database insert failed, but proceeding with emails:", err.message);
+    }
 
     // 1. Email to the user (Confirmation)
     const mailToUser = {
       from: `"PrimeWave Team" <${process.env.EMAIL_USER}>`,
+      replyTo: process.env.EMAIL_USER,
       to: email,
       subject: "Confirmation: We've received your message - PrimeWave",
       html: `
@@ -124,6 +131,7 @@ app.post("/api/contact", async (req, res) => {
     // 2. Email to the Admin (New Inquiry Notification)
     const mailToAdmin = {
       from: `"PrimeWave Web-Form" <${process.env.EMAIL_USER}>`,
+      replyTo: email, // Admin can reply directly to the user
       to: process.env.EMAIL_USER, // The website owner receives this
       subject: `New Inquiry from ${name || "Unknown User"}`,
       html: `
@@ -147,8 +155,13 @@ app.post("/api/contact", async (req, res) => {
       for (let i = 0; i < retries; i++) {
         try {
           const info = await transporter.sendMail(options);
-          console.log(`✅ ${label} sent successfully: ${info.messageId}`);
-          return { ok: true, messageId: info.messageId };
+          console.log(`✅ ${label} successfully accepted by SMTP server for:`, info.accepted);
+          return { 
+            ok: true, 
+            messageId: info.messageId, 
+            accepted: info.accepted, 
+            rejected: info.rejected 
+          };
         } catch (err) {
           console.error(`❌ ${label} attempt ${i + 1} failed:`, err.message);
           if (i === retries - 1) throw err;
@@ -158,10 +171,9 @@ app.post("/api/contact", async (req, res) => {
     };
 
     // IMPORTANT: await email sends so the UI only shows success when SMTP succeeds
-    const [userResult, adminResult] = await Promise.all([
-      sendWithRetry(mailToUser, "Confirmation Email"),
-      sendWithRetry(mailToAdmin, "Admin Notification"),
-    ]);
+    // Send sequentially to ensure maximum stability and clearer logs
+    const userResult = await sendWithRetry(mailToUser, "Confirmation Email");
+    const adminResult = await sendWithRetry(mailToAdmin, "Admin Notification");
 
     res.status(200).json({
       success: true,
