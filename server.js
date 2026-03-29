@@ -86,6 +86,13 @@ app.post("/api/contact", async (req, res) => {
   }
 
   try {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      return res.status(500).json({
+        success: false,
+        error: "SMTP is not configured on the server (missing EMAIL_USER/EMAIL_PASS).",
+      });
+    }
+
     // Insert into PostgreSQL database
     const insertQuery = `INSERT INTO contacts (name, email, message) VALUES ($1, $2, $3) RETURNING id`;
     const dbResult = await pool.query(insertQuery, [name, email, message]);
@@ -141,7 +148,7 @@ app.post("/api/contact", async (req, res) => {
         try {
           const info = await transporter.sendMail(options);
           console.log(`✅ ${label} sent successfully: ${info.messageId}`);
-          return true;
+          return { ok: true, messageId: info.messageId };
         } catch (err) {
           console.error(`❌ ${label} attempt ${i + 1} failed:`, err.message);
           if (i === retries - 1) throw err;
@@ -150,14 +157,20 @@ app.post("/api/contact", async (req, res) => {
       }
     };
 
-    // Fire and forget background tasks
-    sendWithRetry(mailToUser, "Confirmation Email").catch(e => console.error("Final Confirmation failure:", e.message));
-    sendWithRetry(mailToAdmin, "Admin Notification").catch(e => console.error("Final Admin failure:", e.message));
+    // IMPORTANT: await email sends so the UI only shows success when SMTP succeeds
+    const [userResult, adminResult] = await Promise.all([
+      sendWithRetry(mailToUser, "Confirmation Email"),
+      sendWithRetry(mailToAdmin, "Admin Notification"),
+    ]);
 
     res.status(200).json({
       success: true,
-      message: "Your message has been received and is being processed.",
-      id: dbResult.rows[0].id
+      message: "Your message has been received and emails were sent successfully.",
+      id: dbResult.rows[0].id,
+      emails: {
+        user: userResult,
+        admin: adminResult,
+      },
     });
 
   } catch (error) {
@@ -165,7 +178,7 @@ app.post("/api/contact", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "An error occurred while processing your request.",
-      details: error.message
+      details: error?.message || String(error),
     });
   }
 });

@@ -14,7 +14,7 @@ This backend has been migrated from SQLite to PostgreSQL for deployment on Rende
    ```
 3. Create a `.env` file in the `server` directory:
    ```env
-   PORT=5000
+   PORT=5001
    DATABASE_URL=your_postgresql_connection_string
    EMAIL_USER=your_email@gmail.com
    EMAIL_PASS=your_google_app_password
@@ -32,7 +32,7 @@ This backend has been migrated from SQLite to PostgreSQL for deployment on Rende
 5. Set the **Build Command** to `npm install`.
 6. Set the **Start Command** to `npm start`.
 7. Add the following **Environment Variables** in Render Dashboard:
-   - `PORT`: `5000`
+   - `PORT`: `5001`
    - `DATABASE_URL`: Your PostgreSQL Internal/External URL (e.g., `postgresql://user:password@host/database`)
    - `EMAIL_USER`: Your Gmail address
    - `EMAIL_PASS`: Your Google App Password
