@@ -1,0 +1,22 @@
+# Node modules
+node_modules/
+
+# Environment variables (SMTP, secrets)
+.env
+.env.*
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# OS / system files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
