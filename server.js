@@ -47,13 +47,24 @@ const initDb = async () => {
 
 initDb();
 
-// Transporter using Gmail service
+// Transporter using Gmail service with optimized settings for Render
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // true for 465, false for other ports
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, '') : '', // Remove spaces from App Password
   },
+  pool: true, // Use connection pooling
+  maxConnections: 3,
+  maxMessages: 100,
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
+  tls: {
+    rejectUnauthorized: false // Sometimes needed for Render/outbound IPs
+  }
 });
 
 // Verification for Transporter
@@ -103,30 +114,33 @@ app.post("/api/contact", async (req, res) => {
       `,
     };
 
-    // Send email with delay as per original logic
-    setTimeout(async () => {
-      try {
-        await transporter.sendMail(mailOptions);
-        console.log("Email sent to:", email);
-      } catch (emailErr) {
-        console.error("Email sending error:", emailErr);
+    // Send email with retry logic
+    const sendWithRetry = async (mailOptions, retries = 3) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          await transporter.sendMail(mailOptions);
+          console.log(`Email successfully sent to: ${email}`);
+          return true;
+        } catch (err) {
+          console.error(`Email attempt ${i + 1} failed:`, err.message);
+          if (i === retries - 1) throw err;
+          await new Promise(res => setTimeout(res, 2000 * (i + 1))); // Exponential backoff
+        }
       }
-    }, 5000);
+    };
 
-    // Return success response immediately or after email? 
-    // The original code waited for email. I'll maintain that but make it more robust.
-    // Wait, the original code had:
-    // await new Promise((resolve) => setTimeout(resolve, 5000));
-    // await transporter.sendMail(mailOptions);
-    // res.status(200).json({ success: true, message: "Email sent successfully" });
+    // We'll send the email asynchronously to not block the main response
+    // but we'll still wait a bit to catch immediate errors if possible
+    // The user requested < 10s response time, so we should be careful.
     
-    // Let's stick to the original behavior but with the new database logic.
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    await transporter.sendMail(mailOptions);
-    
+    // Fire and forget after saving to DB (DB is already saved at this point)
+    sendWithRetry(mailOptions).catch(err => {
+      console.error("Final email failure after retries:", err.message);
+    });
+
     res.status(200).json({
       success: true,
-      message: "Data saved and email sent successfully",
+      message: "Your message has been received and is being processed.",
       id: dbResult.rows[0].id
     });
 
