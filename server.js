@@ -91,14 +91,14 @@ app.post("/api/contact", async (req, res) => {
     const dbResult = await pool.query(insertQuery, [name, email, message]);
     console.log(`Successfully saved to database with ID: ${dbResult.rows[0].id}`);
 
-    // Email to the user
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
+    // 1. Email to the user (Confirmation)
+    const mailToUser = {
+      from: `"PrimeWave Team" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: "Confirmation: We've received your message - PrimeWave",
       html: `
         <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-          <h2 style="color: #4fc3f7;">Hello ${name || ""},</h2>
+          <h2 style="color: #4fc3f7;">Hello ${name || "there"},</h2>
           <p>Thank you for getting in touch with <strong>PrimeWave Lifestyle & Electronics</strong>.</p>
           <p>This is an automated confirmation that we've successfully received your inquiry. Our team will contact within 48hrs.</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
@@ -114,29 +114,45 @@ app.post("/api/contact", async (req, res) => {
       `,
     };
 
-    // Send email with retry logic
-    const sendWithRetry = async (mailOptions, retries = 3) => {
+    // 2. Email to the Admin (New Inquiry Notification)
+    const mailToAdmin = {
+      from: `"PrimeWave Web-Form" <${process.env.EMAIL_USER}>`,
+      to: process.env.EMAIL_USER, // The website owner receives this
+      subject: `New Inquiry from ${name || "Unknown User"}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; border: 1px solid #eee; padding: 20px; border-radius: 8px;">
+          <h2 style="color: #2563eb; margin-top: 0;">New Website Inquiry</h2>
+          <p><strong>Name:</strong> ${name || "Not provided"}</p>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Message:</strong></p>
+          <div style="background: #f1f5f9; padding: 15px; border-radius: 6px;">
+            ${message}
+          </div>
+          <p style="font-size: 0.85rem; color: #64748b; margin-top: 20px;">
+            Submitted at: ${new Date().toLocaleString()}
+          </p>
+        </div>
+      `,
+    };
+
+    // Send emails with retry logic
+    const sendWithRetry = async (options, label, retries = 3) => {
       for (let i = 0; i < retries; i++) {
         try {
-          await transporter.sendMail(mailOptions);
-          console.log(`Email successfully sent to: ${email}`);
+          const info = await transporter.sendMail(options);
+          console.log(`✅ ${label} sent successfully: ${info.messageId}`);
           return true;
         } catch (err) {
-          console.error(`Email attempt ${i + 1} failed:`, err.message);
+          console.error(`❌ ${label} attempt ${i + 1} failed:`, err.message);
           if (i === retries - 1) throw err;
-          await new Promise(res => setTimeout(res, 2000 * (i + 1))); // Exponential backoff
+          await new Promise(res => setTimeout(res, 2000 * (i + 1))); 
         }
       }
     };
 
-    // We'll send the email asynchronously to not block the main response
-    // but we'll still wait a bit to catch immediate errors if possible
-    // The user requested < 10s response time, so we should be careful.
-    
-    // Fire and forget after saving to DB (DB is already saved at this point)
-    sendWithRetry(mailOptions).catch(err => {
-      console.error("Final email failure after retries:", err.message);
-    });
+    // Fire and forget background tasks
+    sendWithRetry(mailToUser, "Confirmation Email").catch(e => console.error("Final Confirmation failure:", e.message));
+    sendWithRetry(mailToAdmin, "Admin Notification").catch(e => console.error("Final Admin failure:", e.message));
 
     res.status(200).json({
       success: true,
