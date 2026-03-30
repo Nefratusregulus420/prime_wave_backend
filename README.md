@@ -16,8 +16,8 @@ This backend has been migrated from SQLite to PostgreSQL for deployment on Rende
    ```env
    PORT=5001
    DATABASE_URL=your_postgresql_connection_string
-   EMAIL_USER=your_email@gmail.com
-   EMAIL_PASS=your_google_app_password
+   SENDGRID_API_KEY=your_sendgrid_api_key
+   FROM_EMAIL=your_verified_sender@yourdomain.com
    ```
 4. Start the server:
    ```bash
@@ -34,8 +34,8 @@ This backend has been migrated from SQLite to PostgreSQL for deployment on Rende
 7. Add the following **Environment Variables** in Render Dashboard:
    - `PORT`: `5001`
    - `DATABASE_URL`: Your PostgreSQL Internal/External URL (e.g., `postgresql://user:password@host/database`)
-   - `EMAIL_USER`: Your Gmail address
-   - `EMAIL_PASS`: Your Google App Password
+   - `SENDGRID_API_KEY`: Your SendGrid API key
+   - `FROM_EMAIL`: A verified sender email in SendGrid
    - `NODE_ENV`: `production`
 
 ## Database Schema
@@ -55,5 +55,5 @@ CREATE TABLE contacts (
 - Automatic table creation.
 - SSL enabled for Render.
 - CORS enabled for frontend connection.
-- Nodemailer with Gmail integration.
+- SendGrid API email sending via `@sendgrid/mail`.
 - Error handling for database and email operations.

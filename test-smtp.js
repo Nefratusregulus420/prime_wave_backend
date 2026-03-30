@@ -1,62 +1,56 @@
 require("dotenv").config();
-const nodemailer = require("nodemailer");
+const { sendEmail } = require("./utils/sendEmail");
 
 console.log("--------------------------------------------------");
-console.log("🚀 SMTP Diagnostic Tool");
+console.log("🚀 SendGrid Diagnostic Tool");
 console.log("--------------------------------------------------");
-console.log("Testing SMTP connection for:", process.env.EMAIL_USER);
-
-// Clean password for common copy-paste errors
-const emailPass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, '') : '';
-
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: emailPass
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
-  tls: {
-    rejectUnauthorized: false
-  }
-});
+console.log("FROM_EMAIL:", process.env.FROM_EMAIL);
+console.log("SENDGRID_API_KEY present:", Boolean(process.env.SENDGRID_API_KEY));
 
 async function runDiagnostics() {
   const start = Date.now();
-  console.log("1. Starting verification...");
-  
-  try {
-    await transporter.verify();
-    const duration = (Date.now() - start) / 1000;
-    console.log(`✅ Success: SMTP server is reachable and credentials are valid!`);
-    console.log(`⏱️  Latency: ${duration.toFixed(2)} seconds`);
-    
-    console.log("2. Sending test email...");
-    const testMailStart = Date.now();
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER,
-      subject: "SMTP Diagnostic Test",
-      text: "If you received this, your SMTP configuration is working correctly!"
-    });
-    const testMailDuration = (Date.now() - testMailStart) / 1000;
-    console.log(`✅ Success: Test email sent successfully!`);
-    console.log(`⏱️  Email Send Latency: ${testMailDuration.toFixed(2)} seconds`);
-    
-  } catch (error) {
-    console.error("❌ Diagnostic Failed: ", error.message);
-    if (error.code === 'EAUTH') {
-      console.log("💡 Suggestion: Check if your 'App Password' is correct and hasn't been revoked.");
-    } else if (error.code === 'ETIMEDOUT') {
-      console.log("💡 Suggestion: Connection timed out. This often happens on Render Free Tier due to outbound IP restrictions.");
-    }
-  } finally {
-    console.log("--------------------------------------------------");
+  console.log("1. Sending test email via SendGrid...");
+
+  const from = process.env.FROM_EMAIL;
+  const to = process.argv[2] || from;
+
+  if (!from) {
+    console.error("❌ Missing FROM_EMAIL; cannot send diagnostic email.");
+    return;
   }
+
+  if (!to) {
+    console.error("❌ Missing recipient. Provide one like: node test-smtp.js someone@gmail.com");
+    return;
+  }
+
+  if (to === from) {
+    console.warn("⚠️ Skipping send because recipient equals sender (to === from).", { to, from });
+    return;
+  }
+
+  const iso = new Date().toISOString();
+  const subject = `Test Email - ${iso}`;
+  const text = "If you received this, your configuration is working.\n\nThis is the plain-text fallback.";
+  const html =
+    "<h2>SendGrid Test</h2>" +
+    "<p>If you received this, your configuration is working.</p>" +
+    "<p>This message includes <strong>HTML</strong> + text fallback.</p>";
+
+  const result = await sendEmail(
+    to,
+    subject,
+    text,
+    html
+  );
+
+  const duration = (Date.now() - start) / 1000;
+  console.log("2. Result:", result);
+  console.log(`⏱️  Duration: ${duration.toFixed(2)} seconds`);
+  console.log("--------------------------------------------------");
 }
 
-runDiagnostics();
+runDiagnostics().catch((e) => {
+  console.error("❌ Diagnostic failed with unexpected error:", e?.message || e);
+  console.log("--------------------------------------------------");
+});
